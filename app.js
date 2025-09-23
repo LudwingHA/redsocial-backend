@@ -14,9 +14,9 @@ import postRoutes from "./routes/posts.js";
 import chatRoutes from "./routes/chat.js";
 import notificationRoutes from "./routes/notifications.js";
 
-// Models (agregar estos imports)
-import Notification from "./models/Notification.js";
+// Models
 import User from "./models/User.js";
+import Chat from "./models/Chat.js";
 
 dotenv.config();
 
@@ -48,7 +48,7 @@ app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Crear directorio uploads si no existe
 import fs from "fs";
-import Chat from "./models/Chat.js";
+import { notificationService } from "./controllers/notificationService.js";
 const uploadsDir = path.join(__dirname, "uploads");
 const avatarsDir = path.join(uploadsDir, "avatars");
 const postsDir = path.join(uploadsDir, "posts");
@@ -63,8 +63,7 @@ mongoose
   .then(() => console.log("✅ Conectado a MongoDB"))
   .catch((err) => console.error("❌ Error conectando a MongoDB:", err));
 
-// Middleware para verificar token en sockets (NUEVO)
-// Middleware para verificar token en sockets (CORREGIDO)
+// Middleware para verificar token en sockets
 const authenticateSocket = async (socket, next) => {
   try {
     const userId = socket.handshake.query.userId;
@@ -112,13 +111,13 @@ const authenticateSocket = async (socket, next) => {
     next(new Error("Authentication error"));
   }
 };
+
 // Aplicar middleware de autenticación a todos los sockets
 io.use(authenticateSocket);
 
-// Socket.io para chat en tiempo real
+// Socket.io para chat en tiempo real y notificaciones
 app.set("io", io);
 io.on("connection", (socket) => {
-  // Ahora userId viene del middleware de autenticación
   const userId = socket.userId;
   const username = socket.user?.username;
 
@@ -140,7 +139,7 @@ io.on("connection", (socket) => {
     }
   });
 
-  /* ------------------ Join / Leave Chat ------------------ */
+  /* ------------------ JOIN/LEAVE CHAT (EXISTENTE) ------------------ */
   socket.on("joinChat", (chatId) => {
     socket.join(chatId);
     console.log(`Usuario ${username} se unió al chat ${chatId}`);
@@ -151,7 +150,7 @@ io.on("connection", (socket) => {
     console.log(`Usuario ${username} dejó el chat ${chatId}`);
   });
 
-  /* ------------------ Typing ------------------ */
+  /* ------------------ TYPING (EXISTENTE) ------------------ */
   socket.on("typing", ({ chatId }) => {
     socket.to(chatId).emit("typing", { chatId, userId });
     console.log(`⌨️ ${username} está escribiendo en chat ${chatId}`);
@@ -161,7 +160,7 @@ io.on("connection", (socket) => {
     socket.to(chatId).emit("stopTyping", { chatId, userId });
   });
 
-  /* ------------------ Send Message ------------------ */
+  /* ------------------ SEND MESSAGE (EXISTENTE) ------------------ */
   socket.on("sendMessage", async ({ chatId, content }) => {
     if (!content?.trim()) return;
 
@@ -193,127 +192,116 @@ io.on("connection", (socket) => {
       io.to(chatId).emit("newMessage", { chatId, message: savedMessage });
       console.log(`💬 Mensaje enviado por ${username} en chat ${chatId}`);
 
-      // Notificar a otros participantes
-      chat.participants.forEach((p) => {
-        if (p._id.toString() !== userId) {
-          io.to(p._id.toString()).emit("newNotification", {
-            type: "new_message",
-            sender: { _id: userId, username },
-            recipient: p._id,
-            chatId: chatId,
-            message: content.trim(),
-            createdAt: new Date(),
-          });
+      // NOTIFICACIÓN DE MENSAJE - USANDO TU SERVICIO
+      const receiver = chat.participants.find(p => p._id.toString() !== userId);
+      if (receiver) {
+        const notification = await notificationService.createMessageNotification(
+          chatId,
+          userId,
+          receiver._id,
+          content.trim()
+        );
+
+        if (notification) {
+          io.to(receiver._id.toString()).emit("newNotification", notification);
+          console.log(`✅ Notificación de mensaje enviada a ${receiver.username}`);
         }
-      });
+      }
 
     } catch (err) {
       console.error("Error enviando mensaje:", err);
     }
   });
 
-  /* ------------------ Notifications ------------------ */
+  /* ------------------ NOTIFICACIONES (NUEVO) ------------------ */
   socket.on("markNotificationsRead", async (notificationIds) => {
     try {
-      // Marcar notificaciones como leídas
-      await Notification.updateMany(
-        { 
-          _id: { $in: notificationIds },
-          recipient: userId 
-        },
-        { $set: { isRead: true } }
-      );
+      console.log(`📢 Marcando notificaciones como leídas:`, notificationIds);
+      
+      // Usar tu servicio de notificaciones
+      const result = await notificationService.markAsRead(notificationIds, userId);
 
       // Emitir actualización del contador
-      const unreadCount = await Notification.countDocuments({
-        recipient: userId,
-        isRead: false,
-      });
-
-      socket.emit("unreadCountUpdated", { unreadCount });
-      console.log(`📢 Notificaciones marcadas como leídas por ${username}`);
+      socket.emit("unreadCountUpdated", { unreadCount: result.unreadCount });
+      console.log(`✅ Contador actualizado para ${username}: ${result.unreadCount} no leídas`);
 
     } catch (error) {
       console.error("Error marcando notificaciones como leídas:", error);
+      socket.emit("notificationError", { error: "Error marcando notificaciones" });
     }
   });
 
-  // Eventos para posts y likes
+  /* ------------------ NOTIFICACIÓN DE LIKE (NUEVO) ------------------ */
+  socket.on("postLiked", async ({ postId, likerId, postAuthorId }) => {
+    try {
+      console.log(`❤️ Like recibido - Post: ${postId}, LikedBy: ${likerId}, Author: ${postAuthorId}`);
+      
+      // Usar tu servicio de notificaciones
+      const notification = await notificationService.createLikeNotification(
+        postId, 
+        likerId, 
+        postAuthorId
+      );
+
+      if (notification) {
+        // Emitir notificación al autor del post
+        io.to(postAuthorId).emit("newNotification", notification);
+        console.log(`✅ Notificación de like enviada a ${postAuthorId}`);
+      }
+
+    } catch (error) {
+      console.error("Error en notificación de like:", error);
+    }
+  });
+
+  /* ------------------ NOTIFICACIÓN DE COMENTARIO (NUEVO) ------------------ */
+  socket.on("newComment", async ({ postId, commenterId, commentContent, postAuthorId }) => {
+    try {
+      console.log(`💬 Comentario recibido - Post: ${postId}, CommentBy: ${commenterId}`);
+      
+      // Usar tu servicio de notificaciones
+      const notification = await notificationService.createCommentNotification(
+        postId, 
+        commenterId, 
+        postAuthorId, 
+        commentContent
+      );
+
+      if (notification) {
+        io.to(postAuthorId).emit("newNotification", notification);
+        console.log(`✅ Notificación de comentario enviada a ${postAuthorId}`);
+      }
+
+    } catch (error) {
+      console.error("Error en notificación de comentario:", error);
+    }
+  });
+
+  /* ------------------ NEW POST (EXISTENTE - SI LO TIENES) ------------------ */
   socket.on("newPost", async (postData) => {
     try {
       console.log(`📝 Nuevo post por ${username}`);
-      // Notificar a seguidores sobre nuevo post
-      // (Implementar lógica de notificaciones a seguidores)
+      // Aquí puedes agregar lógica para notificar a seguidores si lo necesitas
+      // Por ejemplo: io.to(seguidorId).emit("newPostNotification", postData);
     } catch (error) {
       console.error("Error manejando nuevo post:", error);
     }
   });
 
-  socket.on("postLiked", async ({ postId, likerId, postAuthorId }) => {
-    try {
-      if (postAuthorId !== likerId) {
-        // Crear notificación de like
-        const likeNotification = new Notification({
-          type: "like_post",
-          sender: likerId,
-          recipient: postAuthorId,
-          post: postId,
-          isRead: false,
-          createdAt: new Date(),
-        });
-
-        await likeNotification.save();
-        await likeNotification.populate("sender", "username avatar");
-
-        // Enviar notificación al autor del post
-        io.to(postAuthorId).emit("newNotification", likeNotification);
-        console.log(`❤️ Like notificado: ${username} -> post ${postId}`);
-      }
-    } catch (error) {
-      console.error("Error manejando like:", error);
-    }
-  });
-
-  socket.on("newComment", async ({ postId, commenterId, commentContent, postAuthorId }) => {
-    try {
-      if (postAuthorId !== commenterId) {
-        // Crear notificación de comentario
-        const commentNotification = new Notification({
-          type: "comment_post",
-          sender: commenterId,
-          recipient: postAuthorId,
-          post: postId,
-          comment: commentContent.substring(0, 100), // Limitar longitud
-          isRead: false,
-          createdAt: new Date(),
-        });
-
-        await commentNotification.save();
-        await commentNotification.populate("sender", "username avatar");
-
-        // Enviar notificación al autor del post
-        io.to(postAuthorId).emit("newNotification", commentNotification);
-        console.log(`💬 Comentario notificado: ${username} -> post ${postId}`);
-      }
-    } catch (error) {
-      console.error("Error manejando comentario:", error);
-    }
-  });
-
-  /* ------------------ Disconnect ------------------ */
+  /* ------------------ DISCONNECT (EXISTENTE) ------------------ */
   socket.on("disconnect", (reason) => {
     console.log(`🔌 Usuario desconectado: ${username} (${userId}) - Razón: ${reason}`);
   });
 });
 
-// Routes
+// Routes (EXISTENTES - SIN CAMBIOS)
 app.use("/api/auth", authRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/notifications", notificationRoutes);
 
-// Ruta de salud
+// Ruta de salud (EXISTENTE)
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
@@ -322,7 +310,7 @@ app.get("/api/health", (req, res) => {
   });
 });
 
-// Manejo de errores global
+// Manejo de errores global (EXISTENTE)
 app.use((err, req, res, next) => {
   console.error("🔥 Error:", err);
   res.status(500).json({
@@ -331,7 +319,7 @@ app.use((err, req, res, next) => {
   });
 });
 
-// Ruta 404
+// Ruta 404 (EXISTENTE)
 app.all('/{*splat}', (req, res) => {
   res.status(404).json({
     success: false,
