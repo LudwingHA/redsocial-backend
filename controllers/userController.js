@@ -1,8 +1,8 @@
-import User from '../models/User.js';
-import bcrypt from 'bcryptjs';
-import multer from 'multer';
-import path from 'path';
-import { fileURLToPath } from 'url';
+import User from "../models/User.js";
+import bcrypt from "bcryptjs";
+import multer from "multer";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -10,33 +10,33 @@ const __dirname = path.dirname(__filename);
 // Configuración Multer para avatares
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/avatars/');
+    cb(null, "uploads/avatars/");
   },
   filename: function (req, file, cb) {
-    cb(null, req.user.id + '-' + Date.now() + path.extname(file.originalname));
-  }
+    cb(null, req.user.id + "-" + Date.now() + path.extname(file.originalname));
+  },
 });
 
 const upload = multer({
   storage: storage,
   limits: { fileSize: 5 * 1024 * 1024 },
   fileFilter: function (req, file, cb) {
-    if (file.mimetype.startsWith('image/')) {
+    if (file.mimetype.startsWith("image/")) {
       cb(null, true);
     } else {
-      cb(new Error('Solo se permiten imágenes'));
+      cb(new Error("Solo se permiten imágenes"));
     }
-  }
-}).single('avatar');
+  },
+}).single("avatar");
 
 export const userController = {
   // Obtener perfil del usuario actual
   getCurrentUser: async (req, res) => {
     try {
       const user = await User.findById(req.user.id)
-        .select('-password')
-        .populate('followers', 'username avatar')
-        .populate('following', 'username avatar');
+        .select("-password")
+        .populate("followers", "username avatar")
+        .populate("following", "username avatar");
 
       res.json({ success: true, user });
     } catch (error) {
@@ -47,8 +47,9 @@ export const userController = {
   // Actualizar perfil de usuario
   updateProfile: async (req, res) => {
     try {
-      const { username, email, phone, age, bio, location, interests } = req.body;
-      
+      const { username, email, phone, age, bio, location, interests } =
+        req.body;
+
       const updateData = {};
       if (username) updateData.username = username;
       if (email) updateData.email = email;
@@ -57,20 +58,29 @@ export const userController = {
       if (bio) updateData.bio = bio;
       if (location) updateData.location = location;
       if (interests) {
-        updateData.interests = Array.isArray(interests) 
-          ? interests 
-          : interests.split(',').map(i => i.trim());
+        updateData.interests = Array.isArray(interests)
+          ? interests
+          : interests.split(",").map((i) => i.trim());
       }
 
-      const user = await User.findByIdAndUpdate(
-        req.user.id, 
-        updateData, 
-        { new: true, runValidators: true }
-      ).select('-password');
+      const user = await User.findByIdAndUpdate(req.user.id, updateData, {
+        new: true,
+        runValidators: true,
+      }).select("-password");
 
       res.json({ success: true, user });
     } catch (error) {
       res.status(400).json({ success: false, error: error.message });
+    }
+  },
+  getAllUsers: async (req, res) => {
+    try {
+      const users = await User.find({ _id: { $ne: req.user.id } }).select(
+        "username avatar email"
+      );
+      res.json({ success: true, users });
+    } catch (err) {
+      res.status(500).json({ success: false, error: err.message });
     }
   },
 
@@ -83,14 +93,16 @@ export const userController = {
         }
 
         if (!req.file) {
-          return res.status(400).json({ success: false, error: 'No se subió ninguna imagen' });
+          return res
+            .status(400)
+            .json({ success: false, error: "No se subió ninguna imagen" });
         }
 
         const user = await User.findByIdAndUpdate(
           req.user.id,
           { avatar: `/uploads/avatars/${req.file.filename}` },
           { new: true }
-        ).select('-password');
+        ).select("-password");
 
         res.json({ success: true, user });
       } catch (error) {
@@ -103,12 +115,14 @@ export const userController = {
   getProfile: async (req, res) => {
     try {
       const user = await User.findById(req.params.userId)
-        .select('-password')
-        .populate('followers', 'username avatar')
-        .populate('following', 'username avatar');
+        .select("-password")
+        .populate("followers", "username avatar")
+        .populate("following", "username avatar");
 
       if (!user) {
-        return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        return res
+          .status(404)
+          .json({ success: false, error: "Usuario no encontrado" });
       }
 
       res.json({ success: true, user });
@@ -121,20 +135,22 @@ export const userController = {
   searchUsers: async (req, res) => {
     try {
       const { q } = req.query;
-      
+
       if (!q || q.length < 2) {
-        return res.status(400).json({ 
-          success: false, 
-          error: 'La búsqueda debe tener al menos 2 caracteres' 
+        return res.status(400).json({
+          success: false,
+          error: "La búsqueda debe tener al menos 2 caracteres",
         });
       }
 
       const users = await User.find({
         $or: [
-          { username: { $regex: q, $options: 'i' } },
-          { email: { $regex: q, $options: 'i' } }
-        ]
-      }).select('username avatar email bio followers following').limit(20);
+          { username: { $regex: q, $options: "i" } },
+          { email: { $regex: q, $options: "i" } },
+        ],
+      })
+        .select("username avatar email bio followers following")
+        .limit(20);
 
       res.json({ success: true, users });
     } catch (error) {
@@ -150,7 +166,9 @@ export const userController = {
       const targetUser = await User.findById(userId);
 
       if (!targetUser) {
-        return res.status(404).json({ success: false, error: 'Usuario no encontrado' });
+        return res
+          .status(404)
+          .json({ success: false, error: "Usuario no encontrado" });
       }
 
       const isFollowing = currentUser.following.includes(userId);
@@ -158,30 +176,32 @@ export const userController = {
       if (isFollowing) {
         // Dejar de seguir
         await User.findByIdAndUpdate(req.user.id, {
-          $pull: { following: userId }
+          $pull: { following: userId },
         });
         await User.findByIdAndUpdate(userId, {
-          $pull: { followers: req.user.id }
+          $pull: { followers: req.user.id },
         });
       } else {
         // Seguir
         await User.findByIdAndUpdate(req.user.id, {
-          $addToSet: { following: userId }
+          $addToSet: { following: userId },
         });
         await User.findByIdAndUpdate(userId, {
-          $addToSet: { followers: req.user.id }
+          $addToSet: { followers: req.user.id },
         });
       }
 
-      res.json({ 
-        success: true, 
-        message: isFollowing ? 'Dejaste de seguir al usuario' : 'Ahora sigues al usuario',
-        isFollowing: !isFollowing 
+      res.json({
+        success: true,
+        message: isFollowing
+          ? "Dejaste de seguir al usuario"
+          : "Ahora sigues al usuario",
+        isFollowing: !isFollowing,
       });
     } catch (error) {
       res.status(500).json({ success: false, error: error.message });
     }
-  }
+  },
 };
 
 export default userController;

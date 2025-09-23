@@ -1,6 +1,7 @@
 import express from 'express';
 import authController from '../controllers/authController.js';
 import auth from '../middleware/auth.js';
+import User from '../models/User.js';
 
 const router = express.Router();
 
@@ -125,18 +126,25 @@ router.get('/check-username/:username', async (req, res) => {
   try {
     const { username } = req.params;
     
-    const existingUser = await User.findOne({ 
-      username: new RegExp(`^${username}$`, 'i') 
-    });
+    if (!username || username.trim().length < 3) {
+      return res.status(400).json({
+        success: false,
+        error: 'Username debe tener al menos 3 caracteres'
+      });
+    }
+    
+    const existingUser = await User.findOne({ username })
+      .collation({ locale: 'en', strength: 2 }); // Case insensitive
     
     res.json({ 
       success: true, 
       available: !existingUser 
     });
   } catch (error) {
+    console.error('Error checking username:', error);
     res.status(500).json({ 
       success: false, 
-      error: error.message 
+      error: 'Error interno del servidor' 
     });
   }
 });

@@ -6,6 +6,7 @@ import auth from '../middleware/auth.js';
 const router = express.Router();
 
 router.get('/me', auth, userController.getCurrentUser);
+router.get('/all', auth, userController.getAllUsers)
 router.get('/search', auth, userController.searchUsers);
 router.get('/:userId', auth, userController.getProfile);
 router.put('/profile', auth, userController.updateProfile);
