@@ -22,13 +22,17 @@ const app = express();
 const server = createServer(app);
 const io = new Server(server, {
   cors: {
-    origin: process.env.FRONTEND_URL || "http://localhost:3000",
-    methods: ["GET", "POST"]
+    origin: process.env.FRONTEND_URL || "http://localhost:5173",
+    methods: ["GET", "POST"],
+    credentials: true
   }
 });
 
 // Middleware
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_URL || "http://localhost:5173", // especifica tu frontend
+  credentials: true, // permite envío de cookies/headers
+}));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
@@ -96,12 +100,8 @@ app.use((err, req, res, next) => {
 });
 
 // Ruta 404 - CORREGIDA (usa '*' como string)
-app.use('*', (req, res) => {
-  res.status(404).json({ 
-    success: false, 
-    error: 'Ruta no encontrada',
-    path: req.originalUrl
-  });
+app.all('/{*splat}', (req, res) => {
+  res.send('Ruta no encontrada');
 });
 
 const PORT = process.env.PORT || 5000;
