@@ -137,6 +137,7 @@ export const userController = {
       user: {
         id: user._id,
         username: user.username,
+        bio: user.bio,
         email: user.email,
         avatar: user.avatar,
         createdAt: user.createdAt,
@@ -226,3 +227,4 @@ export const userController = {
 };
 
 export default userController;
+  
