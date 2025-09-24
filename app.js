@@ -161,57 +161,63 @@ io.on("connection", (socket) => {
   });
 
   /* ------------------ SEND MESSAGE (EXISTENTE) ------------------ */
-  socket.on("sendMessage", async ({ chatId, content }) => {
-    if (!content?.trim()) return;
+socket.on("sendMessage", async ({ chatId, content }) => {
+  if (!content?.trim()) return;
 
-    try {
-      const chat = await Chat.findById(chatId).populate(
-        "participants",
-        "username avatar"
+  try {
+    const chat = await Chat.findById(chatId).populate(
+      "participants",
+      "username avatar"
+    );
+    if (!chat) return;
+
+    if (!chat.participants.some((p) => p._id.toString() === userId)) return;
+
+    const newMessage = {
+      sender: userId,
+      content: content.trim(),
+      timestamp: new Date(),
+    };
+
+    chat.messages.push(newMessage);
+    chat.lastMessage = new Date();
+    await chat.save();
+
+    // Poblar sender para enviar a los clientes
+    await chat.populate("messages.sender", "username avatar");
+
+    const savedMessage = chat.messages[chat.messages.length - 1];
+
+    // ✅ SOLUCIÓN: Emitir solo a los OTROS usuarios en el chat
+    // Esto evita que el remitente reciba su propio mensaje por socket
+    socket.to(chatId).emit("newMessage", { chatId, message: savedMessage });
+
+    console.log(`💬 Mensaje enviado por ${username} en chat ${chatId}`);
+
+    // ✅ El remitente ya tiene su mensaje temporal en el frontend
+    // No necesita recibirlo por socket
+
+    // Notificación al receptor
+    const receiver = chat.participants.find(
+      (p) => p._id.toString() !== userId
+    );
+    if (receiver) {
+      const notification = await notificationService.createMessageNotification(
+        chatId,
+        userId,
+        receiver._id,
+        content.trim()
       );
-      if (!chat) return;
 
-      if (!chat.participants.some((p) => p._id.toString() === userId)) return;
-
-      const newMessage = {
-        sender: userId,
-        content: content.trim(),
-        timestamp: new Date(),
-      };
-
-      chat.messages.push(newMessage);
-      chat.lastMessage = new Date();
-      await chat.save();
-
-      // Poblar sender para enviar a los clientes
-      await chat.populate("messages.sender", "username avatar");
-
-      const savedMessage = chat.messages[chat.messages.length - 1];
-
-      // Emitir mensaje a la sala del chat
-      io.to(chatId).emit("newMessage", { chatId, message: savedMessage });
-      console.log(`💬 Mensaje enviado por ${username} en chat ${chatId}`);
-
-      // NOTIFICACIÓN DE MENSAJE - USANDO TU SERVICIO
-      const receiver = chat.participants.find(p => p._id.toString() !== userId);
-      if (receiver) {
-        const notification = await notificationService.createMessageNotification(
-          chatId,
-          userId,
-          receiver._id,
-          content.trim()
-        );
-
-        if (notification) {
-          io.to(receiver._id.toString()).emit("newNotification", notification);
-          console.log(`✅ Notificación de mensaje enviada a ${receiver.username}`);
-        }
+      if (notification) {
+        io.to(receiver._id.toString()).emit("newNotification", notification);
+        console.log(`✅ Notificación de mensaje enviada a ${receiver.username}`);
       }
-
-    } catch (err) {
-      console.error("Error enviando mensaje:", err);
     }
-  });
+  } catch (err) {
+    console.error("Error enviando mensaje:", err);
+  }
+});
 
   /* ------------------ NOTIFICACIONES (NUEVO) ------------------ */
   socket.on("markNotificationsRead", async (notificationIds) => {
