@@ -31,32 +31,41 @@ export const setupSocket = (server) => {
     socket.on("stopTyping", ({ chatId }) => socket.to(chatId).emit("stopTyping", { chatId, userId }));
 
     // SEND MESSAGE
-    socket.on("sendMessage", async ({ chatId, content }) => {
-      if (!content?.trim()) return;
-      try {
-        const chat = await Chat.findById(chatId).populate("participants", "username avatar");
-        if (!chat) return;
+socket.on("sendMessage", async ({ chatId, content }) => {
+  if (!content?.trim()) return;
+  try {
+    const chat = await Chat.findById(chatId).populate("participants", "username avatar");
+    if (!chat) return;
 
-        const newMessage = { sender: userId, content: content.trim(), timestamp: new Date() };
-        chat.messages.push(newMessage);
-        chat.lastMessage = new Date();
-        await chat.save();
-        await chat.populate("messages.sender", "username avatar");
+    const newMessage = { sender: userId, content: content.trim(), timestamp: new Date() };
+    chat.messages.push(newMessage);
+    chat.lastMessage = new Date();
+    await chat.save();
 
-        const savedMessage = chat.messages[chat.messages.length - 1];
-        socket.to(chatId).emit("newMessage", { chatId, message: savedMessage });
-
-        const receiver = chat.participants.find((p) => p._id.toString() !== userId);
-        if (receiver) {
-          const notification = await notificationService.createMessageNotification(
-            chatId, userId, receiver._id, content.trim()
-          );
-          if (notification) io.to(receiver._id.toString()).emit("newNotification", notification);
-        }
-      } catch (err) {
-        console.error("Error enviando mensaje:", err);
-      }
+    // ✅ Populamos el sender de los mensajes
+    await chat.populate({
+      path: "messages.sender",
+      select: "username avatar",
     });
+
+    // Obtenemos el último mensaje ya con sender poblado
+    const savedMessage = chat.messages[chat.messages.length - 1];
+
+    socket.to(chatId).emit("newMessage", { chatId, message: savedMessage });
+
+    // Notificación al receptor
+    const receiver = chat.participants.find((p) => p._id.toString() !== userId);
+    if (receiver) {
+      const notification = await notificationService.createMessageNotification(
+        chatId, userId, receiver._id, content.trim()
+      );
+      if (notification) io.to(receiver._id.toString()).emit("newNotification", notification);
+    }
+  } catch (err) {
+    console.error("Error enviando mensaje:", err);
+  }
+});
+
 
     // NOTIFICATIONS
     socket.on("markNotificationsRead", async (ids) => {

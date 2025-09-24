@@ -3,6 +3,7 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import path from "path";
 import { fileURLToPath } from "url";
+import Post from "../models/Post.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -112,24 +113,44 @@ export const userController = {
   },
 
   // Obtener perfil de usuario por ID
-  getProfile: async (req, res) => {
-    try {
-      const user = await User.findById(req.params.userId)
-        .select("-password")
-        .populate("followers", "username avatar")
-        .populate("following", "username avatar");
+ getProfile: async (req, res) => {
+  try {
+    const userId = req.params.userId;
 
-      if (!user) {
-        return res
-          .status(404)
-          .json({ success: false, error: "Usuario no encontrado" });
-      }
+    // Obtener usuario
+    const user = await User.findById(userId)
+      .select("-password")
+      .populate("followers", "username avatar")
+      .populate("following", "username avatar");
 
-      res.json({ success: true, user });
-    } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
+    if (!user) {
+      return res
+        .status(404)
+        .json({ success: false, error: "Usuario no encontrado" });
     }
-  },
+
+    // Obtener posts del usuario
+    const posts = await Post.find({ author: userId }).sort({ createdAt: -1 });
+
+    res.json({
+      success: true,
+      user: {
+        id: user._id,
+        username: user.username,
+        email: user.email,
+        avatar: user.avatar,
+        createdAt: user.createdAt,
+        followersCount: user.followers.length,
+        followingCount: user.following.length,
+        followers: user.followers,
+        following: user.following,
+      },
+      posts,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+},
 
   // Buscar usuarios
   searchUsers: async (req, res) => {

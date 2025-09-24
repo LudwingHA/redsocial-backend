@@ -1,7 +1,5 @@
 
-
 import User from "../models/User.js";
-
 export const authenticateSocket = async (socket, next) => {
   try {
     const userId = socket.handshake.query.userId;
