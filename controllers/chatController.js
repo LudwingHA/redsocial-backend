@@ -68,6 +68,7 @@ export const chatController = {
       
       chat.messages.push(newMessage);
       chat.lastMessage = new Date();
+      chat.lastMessageContent = content;
       await chat.save();
 
       // Poblar el mensaje recién creado
