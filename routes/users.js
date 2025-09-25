@@ -1,8 +1,8 @@
-// routes/users.js
 import express from 'express';
 import userController from '../controllers/userController.js';
 import auth from '../middleware/auth.js';
 import User from '../models/User.js';
+import { notificationService } from '../controllers/notificationService.js';
 
 const router = express.Router();
 
@@ -17,8 +17,8 @@ router.put('/avatar', auth, userController.updateAvatar);
 // Seguir a un usuario
 router.post("/:id/follow", auth, async (req, res) => {
   try {
-    const currentUserId = req.user.id; // usuario autenticado desde el token
-    const targetId = req.params.id; // usuario a seguir
+    const currentUserId = req.user.id; 
+    const targetId = req.params.id; 
 
     if (currentUserId === targetId)
       return res.status(400).json({ message: "No puedes seguirte a ti mismo" });
@@ -35,6 +35,19 @@ router.post("/:id/follow", auth, async (req, res) => {
       await target.save();
       await user.save();
 
+      // 🔔 Crear notificación de nuevo seguidor
+      const notification = await notificationService.createFollowNotification(currentUserId, targetId);
+      
+      // Emitir por socket
+      const io = req.app.get("io");
+      if (notification && io) {
+        io.to(targetId.toString()).emit("newNotification", notification);
+
+        // Actualizar contador de no leídas
+        const unreadCount = await notificationService.getUnreadCount(targetId);
+        io.to(targetId.toString()).emit("unreadCountUpdated", { unreadCount });
+      }
+
       return res.status(200).json({ message: "Siguiendo al usuario", following: user.following });
     } else {
       return res.status(400).json({ message: "Ya sigues a este usuario" });
@@ -48,8 +61,8 @@ router.post("/:id/follow", auth, async (req, res) => {
 // Dejar de seguir a un usuario
 router.post("/:id/unfollow", auth, async (req, res) => {
   try {
-    const currentUserId = req.user.id; // usuario autenticado desde el token
-    const targetId = req.params.id; // usuario a dejar de seguir
+    const currentUserId = req.user.id; 
+    const targetId = req.params.id; 
 
     if (currentUserId === targetId)
       return res.status(400).json({ message: "No puedes dejar de seguirte a ti mismo" });

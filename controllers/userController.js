@@ -179,51 +179,6 @@ export const userController = {
       res.status(500).json({ success: false, error: error.message });
     }
   },
-
-  // Seguir/Dejar de seguir usuario
-  toggleFollow: async (req, res) => {
-    try {
-      const { userId } = req.params;
-      const currentUser = await User.findById(req.user.id);
-      const targetUser = await User.findById(userId);
-
-      if (!targetUser) {
-        return res
-          .status(404)
-          .json({ success: false, error: "Usuario no encontrado" });
-      }
-
-      const isFollowing = currentUser.following.includes(userId);
-
-      if (isFollowing) {
-        // Dejar de seguir
-        await User.findByIdAndUpdate(req.user.id, {
-          $pull: { following: userId },
-        });
-        await User.findByIdAndUpdate(userId, {
-          $pull: { followers: req.user.id },
-        });
-      } else {
-        // Seguir
-        await User.findByIdAndUpdate(req.user.id, {
-          $addToSet: { following: userId },
-        });
-        await User.findByIdAndUpdate(userId, {
-          $addToSet: { followers: req.user.id },
-        });
-      }
-
-      res.json({
-        success: true,
-        message: isFollowing
-          ? "Dejaste de seguir al usuario"
-          : "Ahora sigues al usuario",
-        isFollowing: !isFollowing,
-      });
-    } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
-    }
-  },
 };
 
 export default userController;

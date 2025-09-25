@@ -63,7 +63,10 @@ export const setupSocket = (server) => {
         await chat.save();
 
         // Populamos sender
-        await chat.populate({ path: "messages.sender", select: "username avatar" });
+        await chat.populate({
+          path: "messages.sender",
+          select: "username avatar",
+        });
         const savedMessage = chat.messages[chat.messages.length - 1];
 
         io.to(chatId).emit("newMessage", {
@@ -73,19 +76,94 @@ export const setupSocket = (server) => {
         });
 
         // Notificación al receptor
-        const receiver = chat.participants.find((p) => p._id.toString() !== userId);
+        const receiver = chat.participants.find(
+          (p) => p._id.toString() !== userId
+        );
         if (receiver) {
-          const notification = await notificationService.createMessageNotification(
-            chatId,
-            userId,
-            receiver._id,
-            content.trim()
-          );
+          const notification =
+            await notificationService.createMessageNotification(
+              chatId,
+              userId,
+              receiver._id,
+              content.trim()
+            );
           if (notification)
-            io.to(receiver._id.toString()).emit("newNotification", notification);
+            io.to(receiver._id.toString()).emit(
+              "newNotification",
+              notification
+            );
         }
       } catch (err) {
         console.error("Error enviando mensaje:", err);
+      }
+    });
+    socket.on(
+      "newComment",
+      async ({ postId, commenterId, commentContent, postAuthorId }) => {
+        if (!postAuthorId || postAuthorId === commenterId) return; // No notificamos al propio usuario
+        try {
+          const notification =
+            await notificationService.createCommentNotification(
+              postId,
+              commenterId,
+              postAuthorId,
+              commentContent
+            );
+          if (notification) {
+            io.to(postAuthorId).emit("newNotification", notification);
+
+            // Actualizar contador de no leídas
+            const unreadCount = await notificationService.getUnreadCount(
+              postAuthorId
+            );
+            io.to(postAuthorId).emit("unreadCountUpdated", { unreadCount });
+          }
+        } catch (err) {
+          console.error("Error creando notificación de comentario:", err);
+        }
+      }
+    );
+
+    // NOTIFICACIONES DE LIKES
+    socket.on("postLiked", async ({ postId, likerId, postAuthorId }) => {
+      if (!postAuthorId || postAuthorId === likerId) return; // No notificamos al propio usuario
+      try {
+        const notification = await notificationService.createLikeNotification(
+          postId,
+          likerId,
+          postAuthorId
+        );
+        if (notification) {
+          io.to(postAuthorId).emit("newNotification", notification);
+
+          // Actualizar contador de no leídas
+          const unreadCount = await notificationService.getUnreadCount(
+            postAuthorId
+          );
+          io.to(postAuthorId).emit("unreadCountUpdated", { unreadCount });
+        }
+      } catch (err) {
+        console.error("Error creando notificación de like:", err);
+      }
+    });
+    // EVENTO: NUEVO SEGUIDOR
+    socket.on("newFollower", async ({ followerId, followedId }) => {
+      if (!followerId || !followedId) return;
+      try {
+        const notification = await notificationService.createFollowNotification(
+          followerId,
+          followedId
+        );
+        if (notification) {
+          io.to(followedId).emit("newNotification", notification);
+
+          const unreadCount = await notificationService.getUnreadCount(
+            followedId
+          );
+          io.to(followedId).emit("unreadCountUpdated", { unreadCount });
+        }
+      } catch (err) {
+        console.error("Error creando notificación de nuevo seguidor:", err);
       }
     });
 
@@ -95,7 +173,9 @@ export const setupSocket = (server) => {
         const result = await notificationService.markAsRead(ids, userId);
         socket.emit("unreadCountUpdated", { unreadCount: result.unreadCount });
       } catch (err) {
-        socket.emit("notificationError", { error: "Error marcando notificaciones" });
+        socket.emit("notificationError", {
+          error: "Error marcando notificaciones",
+        });
       }
     });
 
