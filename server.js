@@ -18,6 +18,6 @@ const io = setupSocket(server);
 app.set("io", io);
 
 server.listen(PORT, () => {
-  console.log(`🚀 Servidor corriendo en puerto ${PORT}`);
-  console.log(`🌐 Health check: http://localhost:${PORT}/api/health`);
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/api/health`);
 });

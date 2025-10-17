@@ -20,7 +20,7 @@ export const setupSocket = (server) => {
     const username = socket.user?.username;
 
     socket.join(userId); // sala personal
-    console.log(`🔌 Usuario conectado: ${username} (${userId})`);
+    console.log(` Usuario conectado: ${username} (${userId})`);
 
     // ➕ Agregar a onlineUsers si no estaba
     if (!onlineUsers.includes(userId)) {

@@ -4,7 +4,7 @@ export const notificationService = {
   // Crear notificación
   createNotification: async (data) => {
     try {
-      console.log("🔔 Creando notificación:", data);
+      console.log("Creando notificación:", data);
 
       // Evitar notificaciones duplicadas recientes (5 min)
       const duplicate = await Notification.findOne({
@@ -16,7 +16,7 @@ export const notificationService = {
       });
 
       if (duplicate) {
-        console.log("🔔 Notificación duplicada encontrada, omitiendo");
+        console.log("Notificación duplicada encontrada, omitiendo");
         return duplicate;
       }
 
@@ -24,7 +24,7 @@ export const notificationService = {
       await notification.save();
       await notification.populate("sender", "username avatar");
 
-      console.log("✅ Notificación creada exitosamente");
+      console.log("Notificación creada exitosamente");
       return notification;
     } catch (error) {
       console.error("❌ Error creando notificación:", error);

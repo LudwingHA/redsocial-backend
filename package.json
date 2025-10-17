@@ -13,13 +13,15 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "server": "nodemon server.js "
+    "server": "nodemon server.js ",
+    "start": "node server.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
+    "mongodb": "^6.20.0",
     "mongoose": "^8.18.1",
     "multer": "^2.0.2",
     "socket.io": "^4.8.1"
@@ -29,5 +31,3 @@
     "nodemon": "^3.1.10"
   }
 }
-
-
