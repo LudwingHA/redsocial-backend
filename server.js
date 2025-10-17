@@ -8,26 +8,23 @@ dotenv.config();
 
 const PORT = process.env.PORT || 3000;
 
-const startServer = async () => {
-  try {
-    // Esperar conexión a MongoDB
-    await connectDB();
+// Crear server + socket
+const server = createServer(app);
+const io = setupSocket(server);
+app.set("io", io);
 
-    // Crear server + socket
-    const server = createServer(app);
-    const io = setupSocket(server);
-    app.set("io", io);
+// Health check inmediato
+app.get("/api/health", (req, res) => {
+  res.status(200).json({ status: "ok" });
+});
 
-    // Levantar servidor
-    server.listen(PORT, () => {
-      console.log(`Servidor corriendo en puerto ${PORT}`);
-      console.log(`Health check: http://localhost:${PORT}/api/health`);
-    });
-  } catch (err) {
-    console.error("❌ Error arrancando el servidor:", err);
-    process.exit(1);
-  }
-};
+// Levantar servidor de inmediato
+server.listen(PORT, () => {
+  console.log(`Servidor corriendo en puerto ${PORT}`);
+  console.log(`Health check: http://localhost:${PORT}/api/health`);
+});
 
-// Ejecutar
-startServer();
+// Conectar a MongoDB en segundo plano
+connectDB().catch((err) => {
+  console.error("❌ Error conectando a MongoDB:", err);
+});
