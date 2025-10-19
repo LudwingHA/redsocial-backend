@@ -191,4 +191,26 @@ export const notificationService = {
       return 0;
     }
   },
+  createStoryNotification: async (storyId, authorId, followerId) => {
+    if (authorId.toString() === followerId.toString()) return null;
+
+    return await notificationService.createNotification({
+      recipient: followerId,
+      sender: authorId,
+      type: "story_uploaded",
+      metadata: { storyId },
+    });
+  },
+
+  // Notificación de like en story
+  createStoryLikeNotification: async (storyId, likerId, storyAuthorId) => {
+    if (likerId.toString() === storyAuthorId.toString()) return null;
+
+    return await notificationService.createNotification({
+      recipient: storyAuthorId,
+      sender: likerId,
+      type: "story_liked",
+      metadata: { storyId },
+    });
+  }
 };

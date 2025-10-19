@@ -10,6 +10,7 @@ import authRoutes from "./routes/auth.js";
 import userRoutes from "./routes/users.js";
 import postRoutes from "./routes/posts.js";
 import chatRoutes from "./routes/chat.js";
+import storyRoutes from "./routes/story.js"
 import notificationRoutes from "./routes/notifications.js";
 
 dotenv.config();
@@ -34,7 +35,7 @@ app.use("/api/users", userRoutes);
 app.use("/api/posts", postRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/notifications", notificationRoutes);
-
+app.use("/api/stories", storyRoutes)
 app.get("/api/health", (req, res) => {
   res.json({ success: true, message: "Servidor funcionando correctamente", timestamp: new Date().toISOString() });
 });

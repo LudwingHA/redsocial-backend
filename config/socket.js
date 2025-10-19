@@ -2,6 +2,7 @@ import { Server } from "socket.io";
 import Chat from "../models/Chat.js";
 import { notificationService } from "../controllers/notificationService.js";
 import { authenticateSocket } from "./socketAuth.js";
+import Story from "../models/Story.js";
 
 export const setupSocket = (server) => {
   const io = new Server(server, {
@@ -176,6 +177,93 @@ export const setupSocket = (server) => {
         socket.emit("notificationError", {
           error: "Error marcando notificaciones",
         });
+      }
+    });
+    // STORYS
+    socket.on("newStory", async ({ storyId }) => {
+      try {
+        const story = await Story.findById(storyId).populate(
+          "author",
+          "username avatar"
+        );
+
+        if (!story) return;
+
+        // Emitir a todos (o seguidores si lo prefieres)
+        io.emit("storyAdded", story);
+
+        console.log(`📸 Nueva story subida por ${story.author.username}`);
+
+        // Crear notificación para los seguidores (opcional)
+        const followers = story.author.followers || [];
+        for (const followerId of followers) {
+          const notification =
+            await notificationService.createStoryNotification(
+              storyId,
+              story.author._id,
+              followerId
+            );
+          if (notification) {
+            io.to(followerId.toString()).emit("newNotification", notification);
+          }
+        }
+      } catch (err) {
+        console.error("Error en newStory:", err);
+      }
+    });
+
+    socket.on("viewStory", async ({ storyId, viewerId }) => {
+      try {
+        const story = await Story.findById(storyId);
+        if (!story) return;
+
+        // Evitar duplicar vistas
+        if (!story.views.includes(viewerId)) {
+          story.views.push(viewerId);
+          await story.save();
+
+          // Emitir actualización
+          io.emit("storyViewed", { storyId, viewsCount: story.views.length });
+        }
+      } catch (err) {
+        console.error("Error en viewStory:", err);
+      }
+    });
+    socket.on("likeStory", async ({ storyId, likerId }) => {
+      try {
+        const story = await Story.findById(storyId).populate("author");
+        if (!story) return;
+
+        const alreadyLiked = story.likes.includes(likerId);
+        if (alreadyLiked) {
+          story.likes = story.likes.filter((id) => id.toString() !== likerId);
+        } else {
+          story.likes.push(likerId);
+        }
+        await story.save();
+
+        io.emit("storyLiked", {
+          storyId,
+          likesCount: story.likes.length,
+        });
+
+        // Notificación al autor (solo si no es el mismo usuario)
+        if (story.author._id.toString() !== likerId) {
+          const notification =
+            await notificationService.createStoryLikeNotification(
+              storyId,
+              likerId,
+              story.author._id
+            );
+          if (notification) {
+            io.to(story.author._id.toString()).emit(
+              "newNotification",
+              notification
+            );
+          }
+        }
+      } catch (err) {
+        console.error("Error en likeStory:", err);
       }
     });
 
