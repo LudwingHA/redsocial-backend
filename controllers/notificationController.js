@@ -20,29 +20,18 @@ export const notificationController = {
     }
   },
 
-  // Marcar notificaciones como leídas
-  markAsRead: async (req, res) => {
-    try {
-      const { notificationIds } = req.body;
-      
-      const result = await notificationService.markAsRead(
-        notificationIds || [], 
-        req.user.id
-      );
-
-      // Emitir evento de socket para actualizar en tiempo real
-      const io = req.app.get("io");
-      if (io) {
-        io.to(req.user.id.toString()).emit("unreadCountUpdated", { 
-          unreadCount: result.unreadCount 
-        });
-      }
-
-      res.json({ success: true, ...result });
-    } catch (error) {
-      res.status(500).json({ success: false, error: error.message });
-    }
-  },
+ // controllers/notificationController.js (fragmento)
+markAsRead: async (req, res) => {
+  try {
+    const { notificationIds } = req.body;
+    const result = await notificationService.markAsRead(notificationIds || [], req.user.id);
+    const io = req.app.get("io");
+    if (io) io.to(req.user.id.toString()).emit("unreadCountUpdated", { unreadCount: result.unreadCount });
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+},
 
   // Marcar todas como leídas
   markAllAsRead: async (req, res) => {
